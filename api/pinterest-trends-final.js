@@ -7,23 +7,10 @@ import { globSync } from "glob";
 // -----------------------------------------------------
 // RENDER CHROME PATH FINDER — FINAL FIXED VERSION
 // -----------------------------------------------------
-function findChromePath() {
-    const base = "/opt/render/.cache/puppeteer";
-
-    // Search entire tree for a Chrome executable
-    const matches = globSync(path.join(base, "**/chrome"));
-
-    if (matches.length > 0) {
-        console.log("🎯 Found Chrome executable:", matches[0]);
-        return matches[0];
-    }
-
-    console.error("❌ Chrome binary NOT FOUND in:", base);
-    return null;
-}
 
 
-const chromePath = findChromePath();
+
+const chromePath = "chrome/linux-138.0.7204.168/chrome-linux64/chrome";
 
 // -----------------------------------------------------
 // EXPRESS SERVER CONFIG
