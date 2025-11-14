@@ -148,8 +148,14 @@ app.get("/api/pinterest-trends-final", async (req, res) => {
 
     try {
         browser = await puppeteer.launch({
-            headless: false, // set to true AFTER login works
-            args: ["--no-sandbox", "--disable-setuid-sandbox"],
+            headless: "new",
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+            args: [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+            ],
         });
 
         const page = await browser.newPage();
