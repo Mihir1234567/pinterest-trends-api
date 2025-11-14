@@ -2,7 +2,6 @@ services:
   - type: web
     name: pinterest-trends-api
     env: node
-    region: singapore
     buildCommand: "./render-build.sh && npm install"
     startCommand: "npm start"
     plan: free
