@@ -2,13 +2,14 @@
     "name": "pinterest-trends-api",
     "version": "1.0.0",
     "type": "module",
-    "main": "api/pinterest-trends.js",
+    "main": "api/pinterest-trends-final.js",
     "scripts": {
-        "start": "node api/pinterest-trends.js"
+        "start": "node api/pinterest-trends-final.js"
     },
     "dependencies": {
-        "express": "^4.19.2",
-        "fs-extra": "^11.2.0",
-        "puppeteer": "24.15.0"
+        "express": "^4.21.2",
+        "fs-extra": "^11.3.2",
+        "glob": "^11.0.3",
+        "puppeteer": "^24.15.0"
     }
 }

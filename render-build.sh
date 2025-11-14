@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-
 set -x
 
-# Install Chrome dependencies
 apt-get update
 apt-get install -y wget gnupg unzip fontconfig locales \
   libx11-dev libx11-6 \
@@ -10,9 +8,12 @@ apt-get install -y wget gnupg unzip fontconfig locales \
   libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcomposite1 \
   libxdamage1 libxrandr2 libxss1 libxtst6
 
-# Install Puppeteer's Chrome explicitly
 echo "📦 Installing Chrome for Puppeteer..."
-PUPPETEER_CACHE_DIR="/opt/render/.cache/puppeteer" \
-  npx puppeteer browsers install chrome
+export PUPPETEER_CACHE_DIR="/opt/render/.cache/puppeteer"
 
-echo "✅ Chrome installed"
+npx puppeteer browsers install chrome
+
+echo "🔍 Chrome install location:"
+find /opt/render/.cache/puppeteer -maxdepth 6 -type f -name "chrome" -print || true
+
+echo "✅ Chrome installation complete."

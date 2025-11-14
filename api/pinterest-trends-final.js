@@ -2,15 +2,46 @@ import express from "express";
 import puppeteer from "puppeteer";
 import fs from "fs-extra";
 import path from "path";
+import { globSync } from "glob";
 
+// -----------------------------------------------------
+// AUTO-DETECT CHROME INSTALL PATH (WORKS ON RENDER)
+// -----------------------------------------------------
+function findChromePath() {
+    const base = "/opt/render/.cache/puppeteer";
+
+    const patterns = [
+        "chrome/linux-*/chrome-linux*/chrome",
+        "chrome/*/chrome-linux*/chrome",
+        "*/chrome-linux*/chrome",
+        "**/chrome",
+    ];
+
+    for (const pattern of patterns) {
+        const fullPattern = path.join(base, pattern);
+        const matches = globSync(fullPattern);
+
+        if (matches.length > 0) {
+            console.log("🎯 Found Chrome executable:", matches[0]);
+            return matches[0];
+        }
+    }
+
+    console.error("❌ Chrome binary not found inside:", base);
+    return null;
+}
+
+const chromePath = findChromePath();
+
+// -----------------------------------------------------
+// EXPRESS SERVER SETUP
+// -----------------------------------------------------
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 const COOKIE_FILE = path.resolve("./cookies.json");
-const MAX_MAIN_ROWS = 20;
-const MAX_SECONDARY = 12;
 
-// --- Your final interest ID map (stable forever) ---
+// INTEREST IDs (final)
 const INTEREST_MAP = {
     "home decor": "935249274030",
     "food and recipes": "918530398158",
@@ -20,6 +51,9 @@ const INTEREST_MAP = {
     "diy crafts": "934876475639",
 };
 
+// -----------------------------------------------------
+// HELPERS
+// -----------------------------------------------------
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function loadCookies(page) {
@@ -47,23 +81,22 @@ async function ensureLogin(page) {
     );
 
     if (!needLogin) {
-        console.log("✅ Already logged in via cookies");
+        console.log("✅ Already logged in using cookies");
         return;
     }
 
-    console.log("⚠️ LOGIN REQUIRED — Please login manually now.");
-    console.log("⏳ Waiting 60 seconds...");
+    console.log("⚠️ Manual login required (only when running locally).");
+    console.log("⏳ Waiting 60 seconds for login...");
 
     await delay(60000);
-
     await saveCookies(page);
-    console.log("🔓 Login saved. Next runs will be fully automatic.");
+    console.log("🔓 Login saved.");
 }
 
 async function scrapeMainTable(page) {
-    return await page.evaluate((MAX_MAIN_ROWS) => {
+    return await page.evaluate(() => {
         const rows = Array.from(document.querySelectorAll("table tbody tr"));
-        return rows.slice(0, MAX_MAIN_ROWS).map((row) => {
+        return rows.map((row) => {
             const cells = row.querySelectorAll("td");
             return {
                 keyword: cells[0]?.innerText.trim() || "",
@@ -72,66 +105,29 @@ async function scrapeMainTable(page) {
                 yearly: cells[3]?.innerText.trim() || "",
             };
         });
-    }, MAX_MAIN_ROWS);
+    });
 }
 
-async function scrapeSecondaryLists(page) {
-    return await page.evaluate((MAX_SECONDARY) => {
-        const result = [];
-
-        // Common growing trends lists
-        const selectors = [
-            ".trend-grid li",
-            ".TrendListItem",
-            ".trends-grid li",
-            ".growing-trends li",
-            ".trend-card",
-            ".trendTile",
-        ];
-
-        for (const selector of selectors) {
-            const items = Array.from(document.querySelectorAll(selector))
-                .map((el) => (el.innerText || "").trim().split("\n")[0])
-                .filter(Boolean);
-
-            if (items.length) {
-                result.push({
-                    source: selector,
-                    items: items.slice(0, MAX_SECONDARY),
-                });
-                break;
-            }
-        }
-
-        // Insight cards / H2/H3 blocks
+async function scrapeSecondary(page) {
+    return await page.evaluate(() => {
         const insights = Array.from(document.querySelectorAll("h2,h3,h4"))
-            .map((e) => e.innerText.trim())
-            .filter((t) => t.length > 3)
-            .slice(0, 8);
+            .map((el) => el.innerText.trim())
+            .filter((t) => t.length > 5);
 
-        if (insights.length) {
-            result.push({
-                source: "insights",
-                items: insights.map((t) => ({ title: t })),
-            });
-        }
-
-        return result;
-    }, MAX_SECONDARY);
+        return { insights: insights.slice(0, 10) };
+    });
 }
 
 async function scrapeInterest(page, interestName, interestId) {
-    console.log(`\n🔎 Scraping: ${interestName}`);
-
     const url = `https://trends.pinterest.com/?l1InterestIds=${interestId}`;
+    console.log("🌐 Loading:", url);
 
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
-    // Wait for main table to appear
-    await page.waitForSelector("table tbody tr td", { timeout: 20000 });
+    await page.waitForSelector("table tbody tr td", { timeout: 25000 });
 
     const mainTable = await scrapeMainTable(page);
-    const secondary = await scrapeSecondaryLists(page);
+    const secondary = await scrapeSecondary(page);
 
     return {
         interest: interestName,
@@ -142,19 +138,30 @@ async function scrapeInterest(page, interestName, interestId) {
     };
 }
 
-// --- API route ---
+// -----------------------------------------------------
+// API ROUTE (MAIN ENTRYPOINT)
+// -----------------------------------------------------
 app.get("/api/pinterest-trends-final", async (req, res) => {
     let browser;
 
     try {
+        if (!chromePath) {
+            throw new Error(
+                "Chrome could not be located in Render environment."
+            );
+        }
+
         browser = await puppeteer.launch({
             headless: "new",
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+            executablePath: chromePath,
             args: [
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--disable-gpu",
                 "--disable-dev-shm-usage",
+                "--disable-features=site-per-process",
+                "--disable-web-security",
+                "--no-zygote",
             ],
         });
 
@@ -172,6 +179,7 @@ app.get("/api/pinterest-trends-final", async (req, res) => {
         }
 
         await browser.close();
+
         res.json({
             fetchedAt: new Date().toISOString(),
             total: results.length,
@@ -179,13 +187,13 @@ app.get("/api/pinterest-trends-final", async (req, res) => {
         });
     } catch (e) {
         if (browser) await browser.close();
-        console.error(e);
+        console.error("❌ ERROR:", e);
         res.status(500).json({ error: e.message });
     }
 });
 
-app.listen(PORT, () =>
-    console.log(
-        `🚀 FINAL Pinterest Trends API ready at http://localhost:${PORT}/api/pinterest-trends-final`
-    )
-);
+// -----------------------------------------------------
+app.listen(PORT, () => {
+    console.log(`🚀 Pinterest Trends API running on port ${PORT}`);
+});
+// -----------------------------------------------------
