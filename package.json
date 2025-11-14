@@ -2,9 +2,9 @@
     "name": "pinterest-trends-api",
     "version": "1.0.0",
     "type": "module",
-    "main": "api/pinterest-trends-final.js",
+    "main": "api/pinterest-trends.js",
     "scripts": {
-        "start": "node api/pinterest-trends-final.js"
+        "start": "node api/pinterest-trends.js"
     },
     "dependencies": {
         "express": "^4.19.2",
