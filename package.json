@@ -4,7 +4,7 @@
     "type": "module",
     "main": "api/pinterest-trends-final.js",
     "scripts": {
-        "start": "node api/pinterest-trends.js"
+        "start": "node api/pinterest-trends-final.js"
     },
     "dependencies": {
         "express": "^4.19.2",
