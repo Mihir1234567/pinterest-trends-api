@@ -5,43 +5,34 @@ import path from "path";
 import { globSync } from "glob";
 
 // -----------------------------------------------------
-// AUTO-DETECT CHROME INSTALL PATH (WORKS ON RENDER)
+// RENDER CHROME PATH FINDER — FINAL FIXED VERSION
 // -----------------------------------------------------
 function findChromePath() {
     const base = "/opt/render/.cache/puppeteer";
 
-    const patterns = [
-        "chrome/linux-*/chrome-linux*/chrome",
-        "chrome/*/chrome-linux*/chrome",
-        "*/chrome-linux*/chrome",
-        "**/chrome",
-    ];
+    // This matches ALL possible Chrome executable paths
+    const matches = globSync(path.join(base, "chrome/**/chrome"));
 
-    for (const pattern of patterns) {
-        const fullPattern = path.join(base, pattern);
-        const matches = globSync(fullPattern);
-
-        if (matches.length > 0) {
-            console.log("🎯 Found Chrome executable:", matches[0]);
-            return matches[0];
-        }
+    if (matches.length > 0) {
+        console.log("🎯 Found Chrome executable:", matches[0]);
+        return matches[0];
     }
 
-    console.error("❌ Chrome binary not found inside:", base);
+    console.error("❌ Chrome binary NOT FOUND in:", base);
     return null;
 }
 
 const chromePath = findChromePath();
 
 // -----------------------------------------------------
-// EXPRESS SERVER SETUP
+// EXPRESS SERVER CONFIG
 // -----------------------------------------------------
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const COOKIE_FILE = path.resolve("./cookies.json");
 
-// INTEREST IDs (final)
+// Official Pinterest Interest IDs
 const INTEREST_MAP = {
     "home decor": "935249274030",
     "food and recipes": "918530398158",
@@ -54,20 +45,21 @@ const INTEREST_MAP = {
 // -----------------------------------------------------
 // HELPERS
 // -----------------------------------------------------
-const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 async function loadCookies(page) {
     if (await fs.pathExists(COOKIE_FILE)) {
         const cookies = await fs.readJson(COOKIE_FILE);
         await page.setCookie(...cookies);
-        console.log("🍪 Cookies loaded.");
+
+        console.log("🍪 Cookies loaded from file.");
     }
 }
 
 async function saveCookies(page) {
     const cookies = await page.cookies();
     await fs.writeJson(COOKIE_FILE, cookies, { spaces: 2 });
-    console.log("💾 Cookies saved.");
+    console.log("💾 Cookies saved to file.");
 }
 
 async function ensureLogin(page) {
@@ -81,21 +73,21 @@ async function ensureLogin(page) {
     );
 
     if (!needLogin) {
-        console.log("✅ Already logged in using cookies");
+        console.log("✅ Already logged in (cookies OK).");
         return;
     }
 
-    console.log("⚠️ Manual login required (only when running locally).");
-    console.log("⏳ Waiting 60 seconds for login...");
-
+    console.log("⚠️ Login required. Waiting 60 seconds...");
     await delay(60000);
+
     await saveCookies(page);
-    console.log("🔓 Login saved.");
+    console.log("🔓 Login saved; continuing.");
 }
 
 async function scrapeMainTable(page) {
     return await page.evaluate(() => {
         const rows = Array.from(document.querySelectorAll("table tbody tr"));
+
         return rows.map((row) => {
             const cells = row.querySelectorAll("td");
             return {
@@ -120,11 +112,16 @@ async function scrapeSecondary(page) {
 
 async function scrapeInterest(page, interestName, interestId) {
     const url = `https://trends.pinterest.com/?l1InterestIds=${interestId}`;
-    console.log("🌐 Loading:", url);
+    console.log("🌐 Scraping:", interestName, "→", url);
 
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
+    await page.goto(url, {
+        waitUntil: "networkidle2",
+        timeout: 60000,
+    });
 
-    await page.waitForSelector("table tbody tr td", { timeout: 25000 });
+    await page.waitForSelector("table tbody tr td", {
+        timeout: 30000,
+    });
 
     const mainTable = await scrapeMainTable(page);
     const secondary = await scrapeSecondary(page);
@@ -139,7 +136,7 @@ async function scrapeInterest(page, interestName, interestId) {
 }
 
 // -----------------------------------------------------
-// API ROUTE (MAIN ENTRYPOINT)
+// API ENDPOINT
 // -----------------------------------------------------
 app.get("/api/pinterest-trends-final", async (req, res) => {
     let browser;
@@ -159,9 +156,6 @@ app.get("/api/pinterest-trends-final", async (req, res) => {
                 "--disable-setuid-sandbox",
                 "--disable-gpu",
                 "--disable-dev-shm-usage",
-                "--disable-features=site-per-process",
-                "--disable-web-security",
-                "--no-zygote",
             ],
         });
 
@@ -185,10 +179,11 @@ app.get("/api/pinterest-trends-final", async (req, res) => {
             total: results.length,
             results,
         });
-    } catch (e) {
+    } catch (err) {
         if (browser) await browser.close();
-        console.error("❌ ERROR:", e);
-        res.status(500).json({ error: e.message });
+
+        console.error("❌ ERROR:", err);
+        res.status(500).json({ error: err.message });
     }
 });
 
