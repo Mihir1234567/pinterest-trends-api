@@ -10,8 +10,8 @@ import { globSync } from "glob";
 function findChromePath() {
     const base = "/opt/render/.cache/puppeteer";
 
-    // This matches ALL possible Chrome executable paths
-    const matches = globSync(path.join(base, "chrome/**/chrome"));
+    // Search entire tree for a Chrome executable
+    const matches = globSync(path.join(base, "**/chrome"));
 
     if (matches.length > 0) {
         console.log("🎯 Found Chrome executable:", matches[0]);
@@ -21,6 +21,7 @@ function findChromePath() {
     console.error("❌ Chrome binary NOT FOUND in:", base);
     return null;
 }
+
 
 const chromePath = findChromePath();
 
